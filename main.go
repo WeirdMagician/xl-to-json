@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -15,8 +16,8 @@ import (
 )
 
 const (
-	sheetno = 3
-	row     = 3
+	sheetno = 0
+	row     = 1
 	col     = 1
 )
 
@@ -26,13 +27,22 @@ type sblock struct {
 }
 
 type record struct {
-	CaseNumber, Product, ProductVersion, ProductFeature, AppsFeature string
-	CaseComments                                                     []*sblock
+	CaseNumber        string            `json:"solutionID"`
+	Description       string            `json:"issue_description"`
+	CaseComments      map[string]string `json:"issue_response"`
+	Product           string            `json:"Quantum_Product"`
+	ProductVersion    string            `json:"Quantum_product_version"`
+	ProductFeature    string            `json:"Quantum_Product_feature"`
+	AppsFeature       string            `json:"DBX_product_feature"`
+	DBXProduct        string            `json:"DBX_Product"`
+	DBXProductVersion string            `json:"DBX_product_version"`
 }
 
 var list []record
 
 var tagdata = make(map[string][]string)
+
+var solution = 1
 
 func init() {
 	err := yaml.Unmarshal(func() ([]byte, interface{}) {
@@ -49,25 +59,36 @@ func init() {
 }
 
 func main() {
-	myslice, err := xlsx.FileToSlice("input.xlsx")
+	myslice, err := xlsx.FileToSlice("input1.xlsx")
 	if err != nil {
 		log.Fatalln("Unable to Convert the input file to 3-dimentional slice", err)
 	}
-	fmt.Println(myslice[3][2])
 
-	var pitem *record
+	var pitem = new(record)
 	for r, v := range myslice[sheetno] {
 		if r >= row {
-			if strings.TrimSpace(v[0]) == "" {
+			if strings.TrimSpace(v[15]) == pitem.CaseNumber {
 				insert(pitem, v)
 			} else {
-				if pitem != nil {
+				if pitem.CaseNumber != "" {
 					list = append(list, *pitem)
 				}
-				item := record{CaseNumber: v[0], Product: v[1], ProductVersion: v[2], ProductFeature: v[3], AppsFeature: v[4]}
-				set := extract(v[5])
-				sb := sblock{Priority: 1, Solution: set["#Solution#"]}
-				item.CaseComments = append(item.CaseComments, &sb)
+				solution = 1
+
+				item := record{CaseNumber: v[15], Description: v[1], Product: v[11], ProductVersion: v[12], ProductFeature: v[13], AppsFeature: func() string {
+					if v[14] == "" {
+						return "NA"
+					}
+					return v[14]
+				}(),
+					DBXProduct: "NA", DBXProductVersion: "NA"}
+
+				set := extract(v[10])
+				//sb := sblock{Priority: 1, Solution: set["#Solution#"]}
+				//item.CaseComments = append(item.CaseComments, &sb)
+				item.CaseComments = make(map[string]string)
+				item.CaseComments["solution"+strconv.Itoa(solution)] = set["#Solution#"]
+				solution++
 				pitem = &item
 			}
 		}
@@ -76,15 +97,17 @@ func main() {
 	if err != nil {
 		log.Fatalln("Json Conversion failed", err)
 	}
-	ioutil.WriteFile("output.json", b, os.FileMode(0777))
+	ioutil.WriteFile("output1.json", b, os.FileMode(0777))
 
 }
 
 func insert(item *record, v []string) {
-	set := extract(v[5])
-	p := item.CaseComments[len(item.CaseComments)-1].Priority
-	sb := sblock{Priority: p + 1, Solution: set["#Solution#"]}
-	item.CaseComments = append(item.CaseComments, &sb)
+	set := extract(v[10])
+	//p := item.CaseComments[len(item.CaseComments)-1].Priority
+	//sb := sblock{Priority: p + 1, Solution: set["#Solution#"]}
+	//item.CaseComments = append(item.CaseComments, &sb)
+	item.CaseComments["solution"+strconv.Itoa(solution)] = set["#Solution#"]
+	solution++
 }
 
 func extract(s string) map[string]string {
